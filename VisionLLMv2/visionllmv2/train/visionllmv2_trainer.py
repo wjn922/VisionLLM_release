@@ -13,9 +13,9 @@ from transformers.utils import (
 )
 from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
-from transformers.trainer_utils import ShardedDDPOption, PREFIX_CHECKPOINT_DIR
-from transformers.trainer_pt_utils import reissue_pt_warnings
-from transformers.training_args import ParallelMode
+# from transformers.trainer_utils import ShardzedDDPOption, PREFIX_CHECKPOINT_DIR
+# from transformers.trainer_pt_utils import reissue_pt_warnings
+# from transformers.training_args import ParallelMode
 
 from packaging import version
 
@@ -311,6 +311,48 @@ class VisionLLMv2Trainer(Trainer):
             frozen_params = [p for p in self.model.parameters() if p.requires_grad == False]
             self.accelerator.state.fsdp_plugin.ignored_parameters = iter(frozen_params)
         return
+    
+    '''
+    def compute_loss(self, model, inputs, return_outputs=False):
+        """
+        How the loss is computed by Trainer. By default, all models return the loss in the first element.
+
+        Subclass and override for custom behavior.
+        """
+        if self.label_smoother is not None and "labels" in inputs:
+            labels = inputs.pop("labels")
+        else:
+            labels = None
+        outputs = model(**inputs)
+        # Save past state if it exists
+        # TODO: this needs to be fixed and made cleaner later.
+        if self.args.past_index >= 0:
+            self._past = outputs[self.args.past_index]
+
+        if labels is not None:
+            unwrapped_model = unwrap_model(model)
+            if _is_peft_model(unwrapped_model):
+                model_name = unwrapped_model.base_model.model._get_name()
+            else:
+                model_name = unwrapped_model._get_name()
+            if model_name in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.values():
+                loss = self.label_smoother(outputs, labels, shift_labels=True)
+            else:
+                loss = self.label_smoother(outputs, labels)
+        else:
+            if isinstance(outputs, dict) and "loss" not in outputs:
+                raise ValueError(
+                    "The model did not return a loss from the inputs, only the following keys: "
+                    f"{','.join(outputs.keys())}. For reference, the inputs it received are {','.join(inputs.keys())}."
+                )
+            # We don't use .loss here since the model may return tuples instead of ModelOutput.
+            loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+            if isinstance(outputs, dict) and 'loss_sd' in outputs:
+                self.log({'loss_sd': outputs.loss_sd})
+            if isinstance(outputs, dict) and 'loss_gdino' in outputs:
+                self.log({'loss_gdino': outputs.loss_gdino})
+        return (loss, outputs) if return_outputs else loss
+    '''
 
     # sampler
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
@@ -337,6 +379,9 @@ class VisionLLMv2Trainer(Trainer):
         elif self.args.group_by_task_data_source:
             cumu_sizes = self.train_dataset.cumulative_sizes
             dataset_sizes = [cumu_sizes[0]] + [cumu_sizes[i]-cumu_sizes[i-1] for i in range(1,len(cumu_sizes))]
+            if self.args.gradient_accumulation_steps > 1:
+                logger.warning("group_by_task_data_source does not support gradient_accumulation_steps > 1")
+                
             assert self.args.gradient_accumulation_steps == 1
             total_batch_size = self.args.train_batch_size * self.args.world_size
             datasets = self.train_dataset.datasets  # list[dataset]
@@ -424,32 +469,27 @@ class VisionLLMv2Trainer(Trainer):
                 },
             ]
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
+            # print(f"self.sharded_ddp: {self.sharded_ddp}")
+            # self.sharded_ddp: None
+            
+            optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
 
-            if self.sharded_ddp == ShardedDDPOption.SIMPLE:
-                from fairscale.optim import OSS
-                self.optimizer = OSS(
-                    params=optimizer_grouped_parameters,
-                    optim=optimizer_cls,
-                    **optimizer_kwargs,
-                )
-            else:
-                self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
-                if optimizer_cls.__name__ == "Adam8bit":
-                    import bitsandbytes
+            self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+            if optimizer_cls.__name__ == "Adam8bit":
+                import bitsandbytes
 
-                    manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
+                manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
 
-                    skipped = 0
-                    for module in opt_model.modules():
-                        if isinstance(module, nn.Embedding):
-                            skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
-                            logger.info(f"skipped {module}: {skipped/2**20}M params")
-                            manager.register_module_override(module, "weight", {"optim_bits": 32})
-                            logger.debug(f"bitsandbytes: will optimize {module} in fp32")
-                    logger.info(f"skipped: {skipped/2**20}M params")
+                skipped = 0
+                for module in opt_model.modules():
+                    if isinstance(module, nn.Embedding):
+                        skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
+                        logger.info(f"skipped {module}: {skipped/2**20}M params")
+                        manager.register_module_override(module, "weight", {"optim_bits": 32})
+                        logger.debug(f"bitsandbytes: will optimize {module} in fp32")
+                logger.info(f"skipped: {skipped/2**20}M params")
 
         if is_sagemaker_mp_enabled():
-            import smdistributed.modelparallel.torch as smp
             self.optimizer = smp.DistributedOptimizer(self.optimizer)
 
         return self.optimizer

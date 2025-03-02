@@ -100,6 +100,14 @@ from ..eval.eval_pose import eval_pose
 from ..eval.eval_sod import eval_sod
 from ..eval.eval_visual_prompt import eval_visual_prompt
 
+# UNINEXT
+import argparse
+from detectron2.config import get_cfg
+from detectron2.engine import default_argument_parser, default_setup
+from detectron2.checkpoint import DetectionCheckpointer
+from detectron2.projects.uninext import add_uninext_config
+from visionllmv2.train.uninext_trainer import Trainer as UNINEXTTrainer
+
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -578,6 +586,33 @@ def train(eval_only=False):
         eval_dataset_config = Config.fromfile(data_args.dataset_config)
         num_eval_datasets = len(eval_dataset_config.datasets)
         for dataset_idx in range(num_eval_datasets):
+            eval_dataset_type = eval_dataset_config.datasets[dataset_idx]['type']
+
+            # UNINEXT
+            if 'video' in eval_dataset_type:
+                print(f'Evaluating {eval_dataset_type} using UNINEXT...')
+                print('Setup args...')
+                cfg = get_cfg()
+                add_uninext_config(cfg)
+                task = eval_dataset_type.split('_')[-1]
+                if task == 'vos':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vos.yaml'
+                cfg.merge_from_file(config_file)
+                cfg.MODEL.WEIGHTS = 'video_joint_r50.pth'
+                cfg.SOT.INFERENCE_ON_3F = True
+                cfg.freeze()
+                print('Default cfg args...')
+                # default_setup(cfg, args)
+                # test UNINEXT
+                print("Building UNINEXT model...")
+                uninext_model = UNINEXTTrainer.build_model(cfg)
+                print("Loading UNINEXT...")
+                DetectionCheckpointer(uninext_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(cfg.MODEL.WEIGHTS, resume=True)
+                print("Testing...")
+                res = UNINEXTTrainer.test(cfg, uninext_model)
+                continue
+            
+            # VisionLLMv2
             eval_dataset = build_dataset(eval_dataset_config.datasets[dataset_idx], 
                             tokenizer=tokenizer,
                             data_args=data_args
@@ -705,6 +740,7 @@ def train(eval_only=False):
 
     # save models
     safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
+
 
 if __name__ == "__main__":
     train()
