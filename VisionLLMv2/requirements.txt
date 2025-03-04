@@ -5,6 +5,7 @@ tqdm
 einops
 shapely
 pyarrow
+pyparsing
 terminaltables
 prettytable
 evaluate
