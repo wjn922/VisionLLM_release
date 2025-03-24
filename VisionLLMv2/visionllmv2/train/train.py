@@ -591,22 +591,36 @@ def train(eval_only=False):
             # UNINEXT
             if 'video' in eval_dataset_type:
                 print(f'Evaluating {eval_dataset_type} using UNINEXT...')
-                print('Setup args...')
                 cfg = get_cfg()
                 add_uninext_config(cfg)
                 task = eval_dataset_type.split('_')[-1]
+                # config file
                 if task == 'vos':
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vos.yaml'
+                elif task == 'rvos':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_rvos.yaml'
+                elif task == 'vis':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vis.yaml'
+                elif task == 'vis':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_ovis.yaml'
+                elif task == 'sot':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_sot.yaml'
                 cfg.merge_from_file(config_file)
                 cfg.MODEL.WEIGHTS = 'video_joint_r50.pth'
-                cfg.SOT.INFERENCE_ON_3F = True
+                # other settings
+                if task == 'vos':
+                    cfg.SOT.INFERENCE_ON_3F = True
+                elif task == 'vis':
+                    cfg.MODEL.USE_IOU_BRANCH = False
+                elif task == 'ovis':
+                    cfg.MODEL.USE_IOU_BRANCH = False
+                elif task == 'sot':
+                    cfg.DATALOADER.NUM_WORKERS = 0
+                    cfg.SOT.ONLINE_UPDATE = True
                 cfg.freeze()
-                print('Default cfg args...')
-                # default_setup(cfg, args)
                 # test UNINEXT
                 print("Building UNINEXT model...")
                 uninext_model = UNINEXTTrainer.build_model(cfg)
-                print("Loading UNINEXT...")
                 DetectionCheckpointer(uninext_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(cfg.MODEL.WEIGHTS, resume=True)
                 print("Testing...")
                 res = UNINEXTTrainer.test(cfg, uninext_model)
