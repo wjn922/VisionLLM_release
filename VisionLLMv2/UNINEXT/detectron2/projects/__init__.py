@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import importlib
+from importlib import abc
 from pathlib import Path
 
 _PROJECTS = {
@@ -15,7 +16,7 @@ if _PROJECT_ROOT.is_dir():
     # This is true only for in-place installation (pip install -e, setup.py develop),
     # where setup(package_dir=) does not work: https://github.com/pypa/setuptools/issues/230
 
-    class _D2ProjectsFinder(importlib.abc.MetaPathFinder):
+    class _D2ProjectsFinder(abc.MetaPathFinder):
         def find_spec(self, name, path, target=None):
             if not name.startswith("detectron2.projects."):
                 return

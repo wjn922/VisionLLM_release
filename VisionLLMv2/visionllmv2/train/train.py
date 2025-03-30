@@ -605,6 +605,10 @@ def train(eval_only=False):
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_ovis.yaml'
                 elif task == 'sot':
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_sot.yaml'
+                elif task == 'mot':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mot.yaml'
+                elif task == 'mots':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mots.yaml'
                 cfg.merge_from_file(config_file)
                 cfg.MODEL.WEIGHTS = 'video_joint_r50.pth'
                 # other settings
@@ -617,6 +621,14 @@ def train(eval_only=False):
                 elif task == 'sot':
                     cfg.DATALOADER.NUM_WORKERS = 0
                     cfg.SOT.ONLINE_UPDATE = True
+                elif task == 'mot':
+                    cfg.MODEL.USE_IOU_BRANCH = False
+                    cfg.TRACK.INIT_SCORE_THR = 0.4
+                    cfg.TRACK.OBJ_SCORE_THR = 0.3
+                elif task == 'mots':
+                    cfg.MODEL.USE_IOU_BRANCH = False
+                    cfg.TRACK.INIT_SCORE_THR = 0.4
+                    cfg.TRACK.OBJ_SCORE_THR = 0.3
                 cfg.freeze()
                 # test UNINEXT
                 print("Building UNINEXT model...")
