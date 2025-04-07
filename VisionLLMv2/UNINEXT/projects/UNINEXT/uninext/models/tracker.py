@@ -211,7 +211,7 @@ class IDOL_Tracker(object):
         #   mask nms    
         valids = mask_nms(masks,bboxes[:,-1],None,self.nms_thr_pre)
         indices = torch.tensor(indices)
-        mask_new_indices = indices[valids.to(indices.device)].tolist()
+        mask_new_indices = indices[valids].tolist() if type(valids) == list else indices[valids.to(indices.device)].tolist()
         indices = mask_new_indices
         bboxes = bboxes[valids, :]
         labels = labels[valids]
@@ -447,7 +447,7 @@ class QuasiDenseEmbedTracker(object):
                 valids[i] = 0
         valids = valids == 1
         indices = torch.tensor(indices)
-        mask_new_indices = indices[valids.to(indices.device)].tolist()
+        mask_new_indices = indices[valids].tolist() if type(valids) == list else indices[valids.to(indices.device)].tolist()
         indices = mask_new_indices
         bboxes = bboxes[valids, :]
         labels = labels[valids]

@@ -452,6 +452,7 @@ class COCOEvaluator(DatasetEvaluator):
         )
 
         # results.update({"AP-" + name: ap for name, ap in results_per_category})
+        print(results)
         return results
 
 def instances_to_coco_json(instances, img_id):

@@ -589,7 +589,7 @@ def train(eval_only=False):
             eval_dataset_type = eval_dataset_config.datasets[dataset_idx]['type']
 
             # UNINEXT
-            if 'video' in eval_dataset_type:
+            if 'video_' in eval_dataset_type or 'image_' in eval_dataset_type:
                 print(f'Evaluating {eval_dataset_type} using UNINEXT...')
                 cfg = get_cfg()
                 add_uninext_config(cfg)
@@ -601,7 +601,7 @@ def train(eval_only=False):
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_rvos.yaml'
                 elif task == 'vis':
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vis.yaml'
-                elif task == 'vis':
+                elif task == 'ovis':
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_ovis.yaml'
                 elif task == 'sot':
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_sot.yaml'
@@ -609,8 +609,12 @@ def train(eval_only=False):
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mot.yaml'
                 elif task == 'mots':
                     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mots.yaml'
+                elif task == 'od':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_r50_eval_od.yaml'
+                elif task == 'rec':
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_r50_eval_rec.yaml'
                 cfg.merge_from_file(config_file)
-                cfg.MODEL.WEIGHTS = 'video_joint_r50.pth'
+                cfg.MODEL.WEIGHTS = 'checkpoints/uninext/video_joint_r50.pth'
                 # other settings
                 if task == 'vos':
                     cfg.SOT.INFERENCE_ON_3F = True

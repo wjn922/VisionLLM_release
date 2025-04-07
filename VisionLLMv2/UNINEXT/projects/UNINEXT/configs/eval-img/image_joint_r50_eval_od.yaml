@@ -1,0 +1,5 @@
+# All video-level tasks joint training (16 GPU training)
+# main setting (R50 video-level joint training)
+_BASE_: "../image_joint_r50.yaml" # all video tasks joint training
+DATASETS:
+  TEST: ("coco_2017_val",)
