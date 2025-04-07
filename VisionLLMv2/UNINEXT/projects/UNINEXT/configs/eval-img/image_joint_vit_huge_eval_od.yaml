@@ -1,0 +1,5 @@
+# All video-level tasks joint training (32 GPU training)
+# main setting (ViT-huge video-level joint training)
+_BASE_: "../image_joint_vit_huge_32g.yaml" # all video tasks joint training
+DATASETS:
+  TEST: ("coco_2017_val",)

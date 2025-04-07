@@ -595,26 +595,48 @@ def train(eval_only=False):
                 add_uninext_config(cfg)
                 task = eval_dataset_type.split('_')[-1]
                 # config file
+                # r50
+                # if task == 'vos':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vos.yaml'
+                # elif task == 'rvos':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_rvos.yaml'
+                # elif task == 'vis':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vis.yaml'
+                # elif task == 'ovis':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_ovis.yaml'
+                # elif task == 'sot':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_sot.yaml'
+                # elif task == 'mot':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mot.yaml'
+                # elif task == 'mots':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mots.yaml'
+                # elif task == 'od':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_r50_eval_od.yaml'
+                # elif task == 'rec':
+                #     config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_r50_eval_rec.yaml'
+                # cfg.merge_from_file(config_file)
+                # cfg.MODEL.WEIGHTS = 'checkpoints/uninext/video_joint_r50.pth'
+                # vit-h
                 if task == 'vos':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vos.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_vit_huge_eval_vos.yaml'
                 elif task == 'rvos':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_rvos.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_vit_huge_eval_rvos.yaml'
                 elif task == 'vis':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_vis.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_vit_huge_eval_vis.yaml'
                 elif task == 'ovis':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_ovis.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_vit_huge_eval_ovis.yaml'
                 elif task == 'sot':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_sot.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_vit_huge_eval_sot.yaml'
                 elif task == 'mot':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mot.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_vit_huge_eval_mot.yaml'
                 elif task == 'mots':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_r50_eval_mots.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-vid/video_joint_vit_huge_eval_mots.yaml'
                 elif task == 'od':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_r50_eval_od.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_vit_huge_eval_od.yaml'
                 elif task == 'rec':
-                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_r50_eval_rec.yaml'
+                    config_file = 'UNINEXT/projects/UNINEXT/configs/eval-img/image_joint_vit_huge_eval_rec.yaml'
                 cfg.merge_from_file(config_file)
-                cfg.MODEL.WEIGHTS = 'checkpoints/uninext/video_joint_r50.pth'
+                cfg.MODEL.WEIGHTS = 'checkpoints/uninext/video_joint_vith.pth'
                 # other settings
                 if task == 'vos':
                     cfg.SOT.INFERENCE_ON_3F = True
