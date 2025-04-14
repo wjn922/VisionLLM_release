@@ -11,14 +11,14 @@ bash scripts/vllmv2_7b/eval/dist_eval_uninext.sh [vllmv2_dir] [eval_config]
 ## 1 OD & IS
 
 ```
-bash scripts/vllmv2_7b/eval/dist_eval_uninext.sh work_dirs/visionllmv2-7b-pure visionllmv2/datasets/configs/video/vos_val.py 
+bash scripts/vllmv2_7b/eval/dist_eval_uninext.sh work_dirs/visionllmv2-7b-pure visionllmv2/datasets/configs/image/od_val.py 
 
 ```
 
 ## 2 REC & RES
 
 ```
-bash scripts/vllmv2_7b/eval/dist_eval_uninext.sh work_dirs/visionllmv2-7b-pure visionllmv2/datasets/configs/video/rec_val.py 
+bash scripts/vllmv2_7b/eval/dist_eval_uninext.sh work_dirs/visionllmv2-7b-pure visionllmv2/datasets/configs/image/rec_val.py 
 ```
 
 ## 3 VIS
