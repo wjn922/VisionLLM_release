@@ -76,7 +76,7 @@ class UNINEXT_VID(nn.Module):
         self.memory_len = cfg.MODEL.IDOL.MEMORY_LEN
         self.batch_infer_len = cfg.MODEL.IDOL.BATCH_INFER_LEN # 10
         self.merge_device = "cpu" if self.merge_on_cpu else self.device
-        self.save_path_prefix = os.path.join(cfg.OUTPUT_DIR, "Annotations")
+        self.save_path_prefix = os.path.join(cfg.OUTPUT_DIR, "inference/refytvos")
 
         # Transformer parameters:
         hidden_dim = cfg.MODEL.DDETRS.HIDDEN_DIM

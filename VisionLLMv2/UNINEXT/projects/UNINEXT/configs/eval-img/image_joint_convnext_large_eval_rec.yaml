@@ -1,0 +1,6 @@
+# All video-level tasks joint training (32 GPU training)
+# main setting (ConvNext-Large video-level joint training)
+_BASE_: "../image_joint_convnext_large.yaml" # all video tasks joint training
+DATASETS:
+  TEST: ("refcoco-unc-val",)
+  # "refcoco-unc-testA", "refcoco-unc-testB", "refcocoplus-unc-val", "refcocoplus-unc-testA", "refcocoplus-unc-testB", "refcocog-umd-val", "refcocog-umd-test"
