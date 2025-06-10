@@ -108,6 +108,9 @@ from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.projects.uninext import add_uninext_config
 from visionllmv2.train.uninext_trainer import Trainer as UNINEXTTrainer
 
+# set timeout
+os.environ["NCCL_SOCKET_TIMEOUT"] = "36000"
+
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True

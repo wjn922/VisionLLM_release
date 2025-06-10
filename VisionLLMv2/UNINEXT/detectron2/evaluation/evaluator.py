@@ -126,6 +126,8 @@ def inference_on_dataset(
     num_devices = get_world_size()
     logger = logging.getLogger(__name__)
     logger.info("Start inference on {} batches".format(len(data_loader)))
+    if is_main_process():
+        print("Start inference on {} batches".format(len(data_loader)))
 
     total = len(data_loader)  # inference data loader must have a fixed length
     if evaluator is None:
@@ -183,6 +185,15 @@ def inference_on_dataset(
                     ),
                     n=5,
                 )
+                if is_main_process():
+                    print(
+                        f"Inference done {idx + 1}/{total}. "
+                        f"Dataloading: {data_seconds_per_iter:.4f} s/iter. "
+                        f"Inference: {compute_seconds_per_iter:.4f} s/iter. "
+                        f"Eval: {eval_seconds_per_iter:.4f} s/iter. "
+                        f"Total: {total_seconds_per_iter:.4f} s/iter. "
+                        f"ETA={eta}"
+                    )
             start_data_time = time.perf_counter()
 
     # Measure the time only for this worker (before the synchronization barrier)

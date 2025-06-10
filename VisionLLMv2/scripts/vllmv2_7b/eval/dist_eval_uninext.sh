@@ -49,7 +49,8 @@ torchrun --nnodes=${NNODES} --nproc_per_node=${GPUS} --master_port=${PORT} \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
     --deepspeed scripts/zero2.json \
-    --report_to none 
+    --report_to none \
+    --ddp_timeout 7200
 
 # e.g.
 # bash scripts/vllmv2_7b/eval/dist_eval_uninext.sh work_dirs/visionllmv2-7b visionllmv2/datasets/configs/video/vos_val.py 

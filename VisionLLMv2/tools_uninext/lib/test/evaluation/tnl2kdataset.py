@@ -23,6 +23,7 @@ class TNL2KDataset(BaseDataset):
         return SequenceList([self._construct_sequence(s) for s in self.sequence_list])
 
     def _construct_sequence(self, sequence_name):
+        # import ipdb; ipdb.set_trace()
         class_name = sequence_name
         # anno_path = '{}/{}/{}/groundtruth_rect.txt'.format(self.base_path, class_name, sequence_name)
         anno_path = '{}/{}/groundtruth.txt'.format(self.base_path, sequence_name)
@@ -70,6 +71,10 @@ class TNL2KDataset(BaseDataset):
         return len(self.sequence_list)
 
     def _get_sequence_list(self):
-        sequence_list = os.listdir(self.base_path)
-
+        sequence_list_candidates = os.listdir(self.base_path)
+        sequence_list = []
+        for candidate in sequence_list_candidates:
+            candidate_path = os.path.join(self.base_path, candidate)
+            if os.path.isdir(candidate_path):
+                sequence_list.append(candidate)
         return sequence_list
