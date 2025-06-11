@@ -135,7 +135,7 @@ class DDETRSegmUniVIDDN(DDETRSegmUniDN):
         mask_crop_padded = F.interpolate(mask_crop_padded, (self.template_sz, self.template_sz), mode='bilinear', align_corners=False)[0].bool()
         mask_crop_padded_gt = F.interpolate(mask_crop_padded_gt, (self.template_sz, self.template_sz), mode='bilinear', align_corners=False)
         im_crop_padded_4c = torch.cat([im_crop_padded, mask_crop_padded_gt], dim=1)
-        
+        # [1, 4, h, w], [1, 1, h, w], to the template_sz
         return im_crop_padded_4c, mask_crop_padded
 
     def debug_template(self, samples):
@@ -564,6 +564,7 @@ class DDETRSegmUniVIDDN(DDETRSegmUniDN):
             bbox[:, 2:] = bbox[:, 2:] - bbox[:, :2]
             ref_gt_mask = ref_gt_masks[batch_idx][None] # (1, 1, H, W)
             if self.extra_backbone_for_template:
+                # [1, 4, h, w], [1, 1, h, w], to the template_sz
                 template_tensor, template_mask = self.get_template_4c(img, mask, bbox, gt_mask=ref_gt_mask)
             else:
                 template_tensor, template_mask = self.get_template(img, mask, bbox)

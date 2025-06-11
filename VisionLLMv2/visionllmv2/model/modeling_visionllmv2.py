@@ -11,8 +11,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch.nn import CrossEntropyLoss
+from torch.utils.checkpoint import checkpoint
 from typing import List, Optional, Tuple, Union, Dict, Any
 import itertools
+from functools import partial, wraps
 
 from transformers.utils import logging, ModelOutput
 from transformers import LlamaModel, LlamaForCausalLM
@@ -102,13 +104,13 @@ class VisionLLMv2PreTrainedModel(PreTrainedModel):
         elif isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
 
-    def _set_gradient_checkpointing(self, module, value=False):
-        if hasattr(module, "gradient_checkpointing"):
-            module.gradient_checkpointing = value
-        # if isinstance(module, CLIPVisionModel):
-        #     module.gradient_checkpointing = value
-        # if isinstance(module, LlamaModel):
-        #     module.gradient_checkpointing = value
+    # def _set_gradient_checkpointing(self, module, value=False):
+    #     if hasattr(module, "gradient_checkpointing"):
+    #         module.gradient_checkpointing = value  
+    #     # if isinstance(module, CLIPVisionModel):
+    #     #     module.gradient_checkpointing = value
+    #     # if isinstance(module, LlamaModel):
+    #     #     module.gradient_checkpointing = value
 
 
 

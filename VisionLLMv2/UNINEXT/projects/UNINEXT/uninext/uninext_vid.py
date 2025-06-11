@@ -951,6 +951,7 @@ class UNINEXT_VID(nn.Module):
                     cur_mask_tensor_final = torch.zeros((1, images[0].size(-2), images[0].size(-1)), device=self.device)
                     cur_mask_tensor_final[:, :image_size[0], :image_size[1]] = cur_mask_tensor_rsz
                     cur_ref_masks = [cur_mask_tensor_final]
+                    # new_template (NestedTensor): tensor [1, 4, h, w]
                     language_dict_features_dict_prev[cur_id], new_template = self.detr.coco_inference_ref_vos(images, cur_ref_bboxes, cur_ref_masks)
                     if self.debug_only:
                         self.debug_template_4c(new_template, vid_name, cur_id, frame_idx)
@@ -979,7 +980,7 @@ class UNINEXT_VID(nn.Module):
         std = np.array([58.395, 57.120, 57.375])
         assert len(samples.tensors) == 1
         i = 0
-        image_mask = samples.tensors[i].permute((1, 2, 0)).cpu().numpy()
+        image_mask = samples.tensors[i].permute((1, 2, 0)).cpu().numpy() # [h, w, 4], template_sz
         image = image_mask[:, :, :3]
         gt_mask = image_mask[:, :, -1]
         image = image * std + mean # (H, W, 3)
@@ -1056,7 +1057,7 @@ class UNINEXT_VID(nn.Module):
             image_size_xyxy = torch.as_tensor([w, h, w, h], dtype=torch.float, device=self.device)
             gt_classes = targets_per_image.gt_classes
             gt_boxes = targets_per_image.gt_boxes.tensor / image_size_xyxy
-            gt_boxes = box_xyxy_to_cxcywh(gt_boxes)
+            gt_boxes = box_xyxy_to_cxcywh(gt_boxes)  # normalized in [0, 1], x1y1x2y2
             # for language-guided detection, classification loss is computed based on the positive map
             positive_map = torch.ones((len(targets_per_image), 1), dtype=torch.bool, device=self.device) # (N, 256) or (1, 1). N is number of objects per image
             if self.use_amp:

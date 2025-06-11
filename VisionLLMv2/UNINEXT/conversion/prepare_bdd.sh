@@ -5,12 +5,16 @@ mv BDD100K/bdd100k datasets/bdd
 
 pip3 install -U numpy
 
+# -----------------------------------------------------------------------------------
+# det train/val
 {
     python3 -m bdd100k.label.to_coco -m det -i datasets/bdd/labels/det_20/det_train.json -o datasets/bdd/labels/det_20/det_train_cocofmt.json
 } &
 {
     python3 -m bdd100k.label.to_coco -m det -i datasets/bdd/labels/det_20/det_val.json -o datasets/bdd/labels/det_20/det_val_cocofmt.json
 } &
+# # -----------------------------------------------------------------------------------
+# mot train/val
 {
     python3 -m bdd100k.label.to_coco -m box_track -i datasets/bdd/labels/box_track_20/train -o datasets/bdd/labels/box_track_20/box_track_train_cocofmt.json
 } &

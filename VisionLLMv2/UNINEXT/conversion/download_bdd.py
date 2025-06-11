@@ -13,8 +13,10 @@ if __name__ == "__main__":
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     url_list = [
+        # mots images
         "http://dl.yf.io/bdd100k/mots20/bdd100k_seg_track_20_images.zip",
         "http://dl.yf.io/bdd100k/mots20/bdd100k_seg_track_20_images.zip.md5",
+        # mot images train/val/test
         "http://dl.yf.io/bdd100k/mot20/images20-track-test-1.zip",
         "http://dl.yf.io/bdd100k/mot20/images20-track-test-1.zip.md5",
         "http://dl.yf.io/bdd100k/mot20/images20-track-test-2.zip",
@@ -35,11 +37,13 @@ if __name__ == "__main__":
         "http://dl.yf.io/bdd100k/mot20/images20-track-train-7.zip.md5",
         "http://dl.yf.io/bdd100k/mot20/images20-track-val-1.zip",
         "http://dl.yf.io/bdd100k/mot20/images20-track-val-1.zip.md5",
+        # mot mots labels
         "https://bdd-data-storage-release.s3.us-west-2.amazonaws.com/bdd100k/2021/bdd100k_box_track_20_labels_trainval.zip",
         "https://bdd-data-storage-release.s3.us-west-2.amazonaws.com/bdd100k/2021/bdd100k_seg_track_20_labels_trainval.zip",
+        # det images/labels
         "https://bdd-data-storage-release.s3.us-west-2.amazonaws.com/bdd100k/2021/bdd100k_images_100k.zip",
         "https://bdd-data-storage-release.s3.us-west-2.amazonaws.com/bdd100k/2021/bdd100k_det_20_labels_trainval.zip",
-        # instance segmentation
+        # instance segmentation images/labels
         "https://bdd-data-storage-release.s3.us-west-2.amazonaws.com/bdd100k/2021/bdd100k_images_10k.zip",
         "https://bdd-data-storage-release.s3.us-west-2.amazonaws.com/bdd100k/2021/bdd100k_ins_seg_labels_trainval.zip",
     ]
