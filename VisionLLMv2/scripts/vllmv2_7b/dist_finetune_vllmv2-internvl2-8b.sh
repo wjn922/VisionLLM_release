@@ -17,16 +17,16 @@ torchrun --nnodes=${NNODES} --nproc_per_node=${GPUS} --master_port=${PORT} \
     --group_by_data_source True \
     --dataset_config ${DATASET_CONFIG} \
     --model_name_or_path ${PRETRAINED_MODEL} \
-    --vis_encoder_path checkpoints/clip-vit-large-patch14-336 \
-    --vl_bridge_type mlp2x_gelu \
-    --vis_output_layer -2 \
-    --use_region_encoder True \
+    --vis_encoder_path ${PRETRAINED_MODEL} \
+    --vl_bridge_type internvl_mlp \
+    --vis_output_layer -1 \
+    --use_region_encoder False \
     --freeze_vis_encoder True \
-    --freeze_llm False \
+    --tune_llm_embed True \
     --use_im_start_end False \
-    --image_size 336 \
-    --image_max_tile 4 \
-    --use_pixelshuffle False \
+    --image_size 448 \
+    --image_max_tile 6 \
+    --use_pixelshuffle True \
     --image_aspect_ratio anyres \
     --bf16 True \
     --output_dir ${OUTPUT_DIR} \
@@ -38,7 +38,7 @@ torchrun --nnodes=${NNODES} --nproc_per_node=${GPUS} --master_port=${PORT} \
     --save_strategy "steps" \
     --save_steps 1000 \
     --save_total_limit 1 \
-    --learning_rate 2e-5 \
+    --learning_rate 1e-5 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
@@ -53,4 +53,4 @@ torchrun --nnodes=${NNODES} --nproc_per_node=${GPUS} --master_port=${PORT} \
     | tee ${OUTPUT_DIR}/train.log
 
 # e.g.
-# s8a bash scripts/vllmv2_7b/dist_finetune_uninext.sh work_dirs/visionllmv2-7b-pure-ft-uninext work_dirs/visionllmv2-7b-pure visionllmv2/datasets/configs/uninext/od_train.py
+# s8a bash scripts/vllmv2_7b/dist_finetune_vllmv2-internvl2-8b.sh work_dirs/visionllmv2-internvl2-8b-ft-uninext work_dirs/internvl2-8b visionllmv2/datasets/configs/uninext/uninext_train.py

@@ -10,11 +10,17 @@ if __name__ == "__main__":
             continue
         with open(os.path.join(data_root, fname), "r") as f:
             data = json.load(f)
-        if "/" in data[0]["name"]:
-            print(fname)
-            for d in data:
-                d["name"] = d["name"].split("/")[-1]
-            with open(os.path.join(data_root, fname), "w") as f:
-                json.dump(data, f)
-        else:
+            if isinstance(data, dict):
+                data = data['frames']
+        try:
+            if "/" in data[0]["name"]:
+                print(fname)
+                for d in data:
+                    d["name"] = d["name"].split("/")[-1]
+                with open(os.path.join(data_root, fname), "w") as f:
+                    json.dump(data, f)
+            else:
+                continue
+        except Exception as e:
+            print(f"{fname} error: {e}")
             continue

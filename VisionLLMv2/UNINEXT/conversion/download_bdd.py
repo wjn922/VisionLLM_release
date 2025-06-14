@@ -13,7 +13,7 @@ if __name__ == "__main__":
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     url_list = [
-        # mots images
+        # mots images train/val
         "http://dl.yf.io/bdd100k/mots20/bdd100k_seg_track_20_images.zip",
         "http://dl.yf.io/bdd100k/mots20/bdd100k_seg_track_20_images.zip.md5",
         # mot images train/val/test

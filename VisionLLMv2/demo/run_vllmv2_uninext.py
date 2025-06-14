@@ -79,6 +79,11 @@ def eval_model(args):
     model.get_llm().config.use_cache = True
     # init special token ids
     model.init_special_token_ids(tokenizer)
+    if model.config.vis_encoder_config.model_type == 'intern_vit_6b' and model.config.llm_config.model_type == 'internlm2': # InternVL
+        model.imp_token_id = tokenizer.convert_tokens_to_ids('<img>')  
+        IM_PATCH_TOKEN = '<img>'
+    else:
+        IM_PATCH_TOKEN = DEFAULT_TOKENS['imp']
 
     # get image
     image = load_image(args.image_file)
@@ -120,7 +125,7 @@ def eval_model(args):
     input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda() # [1, L]
     # replace with 'imp' tokens
     use_im_start_end = args.use_im_start_end
-    replace_token = DEFAULT_TOKENS['imp'] * image_token_len
+    replace_token = IM_PATCH_TOKEN * image_token_len
     if use_im_start_end:
         replace_token = DEFAULT_TOKENS['boi'] + replace_token + DEFAULT_TOKENS['eoi']
     replace_token_ids = tokenizer([replace_token], return_tensors="pt").input_ids[0][1:].cuda() # [L,], remove start token
@@ -224,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument('--image_aspect_ratio', type=str, default='anyres')
     parser.add_argument("--use_im_start_end", type=bool, default=False)
     parser.add_argument("--image_size", type=int, default=336)
-    parser.add_argument("--image_max_tile", type=int, default=6)
+    parser.add_argument("--image_max_tile", type=int, default=4)
     parser.add_argument("--use_pixelshuffle", type=bool, default=False)
     args = parser.parse_args()
 
