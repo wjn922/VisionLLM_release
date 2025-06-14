@@ -4,16 +4,17 @@ import os
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
 
-from PIL import Image
-
+import re
+import cv2
 import requests
 from PIL import Image
 from io import BytesIO
+import numpy as np
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers import CLIPVisionModel, CLIPImageProcessor, CLIPVisionConfig
 
-
+# visionllmv2
 from visionllmv2.util.misc import nested_tensor_from_tensor_list
 from visionllmv2.utils import disable_torch_init
 from visionllmv2.mm_utils import expand2square, dynamic_preprocess, KeywordsStoppingCriteria
@@ -22,46 +23,43 @@ from visionllmv2.constant import IGNORE_INDEX, DEFAULT_TOKENS
 from visionllmv2.datasets.llava_data import tokenizer_image_token
 from visionllmv2.model.modeling_visionllmv2 import VisionLLMv2Model
 
+# uninext
+from detectron2.config import get_cfg
+from detectron2.checkpoint import DetectionCheckpointer
+from detectron2.projects.uninext import add_uninext_config
+from detectron2.structures import BoxMode
+
+from .colormap import colormap
+from .uninext_predictor import UNINEXTImagePredictor
+
 IMAGE_TOKEN_INDEX = -200
 
-# def insert_ids(output_ids, insert_positions, emb_ids):
-#         """
-#         Args:
-#         output_ids: torch.Tensor, original ids
-#         insert_positions: torch.Tensor, positions for inserting ids
-#         emb_ids: torch.Tensor, the ids to be inserted
+def extract_task(string):
+    # <task> ... (..) </task>, 提取 () 中间的内容
+    pattern = r'<task>.*?\((.*?)\)</task>' 
+    # 使用正则表达式搜索匹配项
+    match = re.search(pattern, string)
+    # 如果找到匹配项，返回括号内的内容，否则返回空字符串
+    if match:
+        return match.group(1)
+    else:
+        return ""
 
-#         Returns:
-#         new_output_ids: torch.Tensor, output_ids
-#         """
-#         device = output_ids.device
+def extract_refs(text: str) -> list[str]:
+    # 提取每个 <ref> ... </ref> 中间的内容
+    return re.findall(r'<ref>(.*?)</ref>', text, re.DOTALL)
 
-#         # calculate new length
-#         new_length = output_ids.size(0) + len(insert_positions) * emb_ids.size(0)
-#         # creat a new output_ids 
-#         new_output_ids = torch.zeros(new_length, dtype=torch.long).to(device)
+# UNINEXT config
+def setup_cfg(args):
+    cfg = get_cfg()
+    add_uninext_config(cfg)
+    cfg.merge_from_file(args.config_file)
+    # cfg.freeze()
+    return cfg
 
-#         output_index = 0
-#         new_output_index = 0
-#         for i in range(output_ids.size(0)):
-#             new_output_ids[new_output_index] = output_ids[output_index]
-#             new_output_index += 1
-
-#             # if current pos need insert ids
-#             if output_index in insert_positions:
-#                 for emb_id in emb_ids:
-#                     new_output_ids[new_output_index] = emb_id
-#                     new_output_index += 1
-
-#             output_index += 1
-        
-#         # the last pos whether need insert ids
-#         if output_index in insert_positions:
-#             for emb_id in emb_ids:
-#                 new_output_ids[new_output_index] = emb_id
-#         return new_output_ids
 
 def load_image(image_file):
+    
     if image_file.startswith('http') or image_file.startswith('https'):
         response = requests.get(image_file)
         image = Image.open(BytesIO(response.content)).convert('RGB')
@@ -71,7 +69,7 @@ def load_image(image_file):
 
 
 def eval_model(args):
-    # Model
+    # Load VisionLLMv2 Model
     disable_torch_init()
     model_name = os.path.expanduser(args.model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False, trust_remote_code=True)
@@ -84,6 +82,7 @@ def eval_model(args):
         IM_PATCH_TOKEN = '<img>'
     else:
         IM_PATCH_TOKEN = DEFAULT_TOKENS['imp']
+
 
     # get image
     image = load_image(args.image_file)
@@ -164,64 +163,78 @@ def eval_model(args):
     outputs = outputs.strip('</s>').strip()
     print(outputs)
 
-    # # ------------------------------------------------------------------
-    # # if use_gdino
-    # output_ids = output_ids[:, input_token_len:]  # [B, out_len]
-    # transform = T.Compose([
-    #     T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-    #     T.Resize(size=800, max_size=1333, interpolation=InterpolationMode.BICUBIC),
-    #     T.ToTensor(),
-    #     T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
-    # ])
-    
-    # emb_ids = torch.tensor([x for x in range(model.emb_token_id, model.emb_token_id + model.num_embs)], dtype=torch.long).to(output_ids.device)  
-    # new_output_ids = []
-    # for cur_output_ids in output_ids:  # inference, bs=1
-    #     cur_new_output_ids = cur_output_ids
-    #     emb_start_pos_det = torch.where(cur_output_ids==model.det_tool_id)[0]
-    #     emb_start_pos_seg = torch.where(cur_output_ids==model.seg_tool_id)[0]
-    #     emb_start_pos_grd = torch.where(cur_output_ids==model.grd_tool_id)[0]
-    #     emb_start_pos = torch.cat([emb_start_pos_det, emb_start_pos_seg, emb_start_pos_grd], dim=0)
-    #     emb_start_pos = torch.sort(emb_start_pos)[0]
-    #     cur_new_output_ids = insert_ids(cur_new_output_ids, emb_start_pos, emb_ids)
-    #     new_output_ids.append(cur_new_output_ids)
-    # output_ids = torch.stack(new_output_ids, dim=0)
-    
-    # if model.det_tool_id in output_ids:
-    #     assert model.use_gdino
-    #     image_aug = transform(load_image(args.image_file)).cuda().to(torch.bfloat16)  # [3, h, w], after aug
-    #     img_h, img_w = image_aug.shape[-2:]
-    #     img_meta = {'img_shape': (img_h, img_w)}
-    #     img_metas = [img_meta]
-    #     images_aug = nested_tensor_from_tensor_list([image_aug], size_divisibility=32)
-    #     pixel_values, pixel_mask = images_aug.tensors, ~images_aug.mask  # [bs, 3, h, w], [bs, h, w]
-    #     pixel_mask = pixel_values[:, 0, :, :] != 0  # valid is 1
-    #     # select the corresponding [EMB] hidden states as text_query
-    #     batch_size, seq_len, hidden_size = output_hidden_states.shape
-    #     emb_select = (output_ids[:, :-1] >= model.emb_token_id) & (output_ids[:, :-1] <= model.emb_token_id + model.num_embs - 1)  # [bs, seq_len]
-    #     # if have [EMB] tokens
-    #     if emb_select.sum() != 0:
-    #         num_patches = emb_select.sum(-1) // model.num_embs  # [bs,]
-    #         max_num_patches = num_patches.max()
-    #         text_query = torch.zeros((batch_size, max_num_patches, model.num_embs, hidden_size), dtype=output_hidden_states.dtype, device=output_hidden_states.device) # [bs, max_num_patches, num_embs, c]
-    #         text_query_masks = torch.zeros(batch_size, max_num_patches, dtype=torch.bool, device=output_hidden_states.device)       # [bs, max_num_patches], valid is 1
-    #         for batch_idx in range(batch_size):
-    #             if num_patches[batch_idx] != 0:
-    #                 text_query_i = output_hidden_states[batch_idx, emb_select[batch_idx], :].reshape(-1, model.num_embs, hidden_size)  # [num_patch_i*num_embs, c] -> [num_patch_i, num_embs, c]
-    #                 text_query[batch_idx, :num_patches[batch_idx]] = text_query_i
-    #                 text_query_masks[batch_idx, :num_patches[batch_idx]] = 1
-    #         with torch.inference_mode():
-    #             gdino_outputs = model.gdino(pixel_values, pixel_mask=pixel_mask, text_query=text_query, text_query_masks=text_query_masks)
-    #         gdino_logits = gdino_outputs.logits[:, :, :max_num_patches]  # remove padding logits
-    #         gdino_outputs.logits = gdino_logits
-    #         from visionllmv2.model.modeling_visionllmv2 import debug_predictions
-    #         debug_predictions(pixel_values.float(), gdino_outputs, img_metas)
+
+    # -------------------------------------------------------------------
+    # If use UNINEXT
+    # Load UNINEXT Model
+    if "r50" in args.uninext_weights: 
+        uninext_type = "r50"
+    elif "convnext_large" in args.uninext_weights:
+        uninext_type = "convnext_large"
+    else:
+        uninext_type = "vit_huge"
+    task = extract_task(outputs)
+    if task != "": 
+        test_categories = extract_refs(outputs) # list[dict]
+        test_categories = [{"isthing": 1, "id": i + 1, "name": cat.strip()} for i, cat in enumerate(test_categories)]  # list[dict]
+        # set uninext config-file
+        if task in ['od', 'is', 'rec', 'res']:  # image task
+            args.config_file = f"UNINEXT/projects/UNINEXT/configs/image_joint_{uninext_type}.yaml"
+        else:  # video task
+            args.config_file = f"UNINEXT/projects/UNINEXT/configs/video_joint_{uninext_type}.yaml"
+        cfg = setup_cfg(args)
+        # maybe modified for different tasks
+        cfg.MODEL.WEIGHTS = args.uninext_weights
+        cfg.freeze()
+
+        # setup uninext
+        input_image = cv2.imread(args.image_file)
+        predictor = UNINEXTImagePredictor(cfg)
+        predictions = predictor(input_image, task='detection', test_categories=test_categories)['instances']  # have been postprocessed to original size
+
+        # visualization
+        os.makedirs('uninext_outputs', exist_ok=True)
+        visualize_image_predictions(args.image_file, predictions, test_categories, show_box=True, show_mask=True)
+
+
+def visualize_image_predictions(image_path, predictions, test_categories, show_box=True, show_mask=True):
+    # image: cv2 image of [H, W, 3], BGR format
+    # predictions: d2 Instances
+    image = cv2.imread(image_path)    # [H, W, 3], BGR format
+    pred_scores = predictions.scores  # [N,]
+    pred_classes = predictions.pred_classes
+    pred_boxes = predictions.pred_boxes.tensor
+    pred_masks = predictions.pred_masks
+    choose = pred_scores > 0.5
+    pred_scores = pred_scores[choose].cpu().numpy()
+    pred_classes = pred_classes[choose].cpu().numpy()
+    pred_boxes = pred_boxes[choose].cpu().numpy()
+    pred_boxes = BoxMode.convert(pred_boxes, BoxMode.XYXY_ABS, BoxMode.XYWH_ABS)
+    pred_masks = pred_masks[choose].cpu().numpy().astype(np.float32)
+
+    # visualize
+    color_list = colormap().tolist()
+    save_image = image.astype(np.float32)
+    for inst_idx, (class_idx, box, mask) in enumerate(zip(pred_classes, pred_boxes, pred_masks)):
+        color = color_list[inst_idx%79]
+        if show_box:
+            x1, y1, w, h = box
+            cv2.rectangle(save_image, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color, thickness=2)
+            cv2.putText(save_image, test_categories[class_idx]['name'], (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color=color, thickness=2)
+        if show_mask:
+            color_mask = np.array(color) * mask[:, :, None] * 0.5
+            save_image += color_mask
+        save_path = f"uninext_outputs/{os.path.basename(image_path)}"
+        cv2.imwrite(save_path, save_image)
+    return
+
 
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    # vllmv2
     parser.add_argument("--model-name", type=str, default="facebook/opt-350m")
     parser.add_argument("--image-file", type=str, required=True)
     parser.add_argument("--query", type=str, required=True)
@@ -231,6 +244,8 @@ if __name__ == "__main__":
     parser.add_argument("--image_size", type=int, default=336)
     parser.add_argument("--image_max_tile", type=int, default=4)
     parser.add_argument("--use_pixelshuffle", type=bool, default=False)
+    # uninext
+    parser.add_argument("--uninext_weights", type=str, default="checkpoints/uninext/video_joint_convnext_large.pth")
     args = parser.parse_args()
 
     eval_model(args)

@@ -1,4 +1,5 @@
 # visionllmv2-llava-7b
+# for vision tasks, outputs are saved to 'uninext_outputs'
 s1a python3 -m demo.run_vllmv2_uninext \
     --model-name work_dirs/internvl2-8b \
     --image-file assets/coco2.jpg \

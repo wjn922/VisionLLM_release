@@ -12,7 +12,7 @@ PORT=${PORT:-25001}
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
 torchrun --nnodes=${NNODES} --nproc_per_node=${GPUS} --master_port=${PORT} \
     visionllmv2/train/train_mem.py \
-    --version v1 \
+    --version internlm2_chat \
     --multi_dataset True \
     --group_by_data_source True \
     --dataset_config ${DATASET_CONFIG} \
