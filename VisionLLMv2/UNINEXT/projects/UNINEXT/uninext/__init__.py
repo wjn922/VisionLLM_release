@@ -1,6 +1,7 @@
 from .config import add_uninext_config
 from .uninext_img import UNINEXT_IMG
 from .uninext_vid import UNINEXT_VID
+from .uninext_vid_demo import UNINEXT_VID_DEMO
 # from .uninext_vots import UNINEXT_VOTS
 from .data import build_detection_train_loader, build_detection_test_loader
 from .data.objects365 import categories

@@ -59,21 +59,7 @@ class UNINEXTImagePredictor:
         assert self.input_format in ["RGB", "BGR"], self.input_format
         # for UNINEXT
         self.tokenizer = AutoTokenizer.from_pretrained('checkpoints/bert-base-uncased')
-        self.prompt_test_dict = {}
-        self.positive_map_label_to_token_dict = {}
-        test_categories = None
-        if test_categories is not None:
-            prompt_test, positive_map_label_to_token = create_queries_and_maps(test_categories, self.tokenizer) # for example, test_categories = [{"name": "person"}]
-        else:
-            for dataset_name in cfg.DATASETS.TRAIN:
-                if dataset_name.startswith("coco"):
-                    prompt_test, positive_map_label_to_token = create_queries_and_maps(COCO_CATEGORIES, self.tokenizer)
-                    self.prompt_test_dict["coco"] = prompt_test
-                    self.positive_map_label_to_token_dict["coco"] = positive_map_label_to_token
-                elif dataset_name.startswith("objects365_v2"):
-                    prompt_test, positive_map_label_to_token = create_queries_and_maps(OBJECTS365V2_CATEGORIES, self.tokenizer)
-                    self.prompt_test_dict["obj365v2"] = prompt_test
-                    self.positive_map_label_to_token_dict["obj365v2"] = positive_map_label_to_token
+
 
     def __call__(self, original_image, task, test_categories):
         """
@@ -101,4 +87,84 @@ class UNINEXTImagePredictor:
                 "expressions": expressions, "positive_map_label_to_token": positive_map_label_to_token
             }
             predictions = self.model([inputs])[0]
+            return predictions
+
+
+class UNINEXTVideoPredictor:
+    """
+    Create a simple end-to-end predictor with the given config that runs on
+    single device for a single input image.
+
+    Compared to using the model directly, this class does the following additions:
+
+    1. Load checkpoint from `cfg.MODEL.WEIGHTS`.
+    2. Always take BGR image as the input and apply conversion defined by `cfg.INPUT.FORMAT`.
+    3. Apply resizing defined by `cfg.INPUT.{MIN,MAX}_SIZE_TEST`.
+    4. Take one input image and produce a single output, instead of a batch.
+
+    This is meant for simple demo purposes, so it does the above steps automatically.
+    This is not meant for benchmarks or running complicated inference logic.
+    If you'd like to do anything more complicated, please refer to its source code as
+    examples to build and use the model manually.
+
+    Attributes:
+        metadata (Metadata): the metadata of the underlying dataset, obtained from
+            cfg.DATASETS.TEST.
+
+    Examples:
+    ::
+        pred = DefaultPredictor(cfg)
+        inputs = cv2.imread("input.jpg")
+        outputs = pred(inputs)
+    """
+
+    def __init__(self, cfg):
+        self.cfg = cfg.clone()  # cfg can be modified by model
+        self.model = build_model(self.cfg)
+        self.model.eval()
+        if len(cfg.DATASETS.TEST):
+            self.metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
+
+        checkpointer = DetectionCheckpointer(self.model)
+        checkpointer.load(cfg.MODEL.WEIGHTS)
+
+        self.aug = T.ResizeShortestEdge(
+            [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
+        )
+
+        self.input_format = cfg.INPUT.FORMAT
+        assert self.input_format in ["RGB", "BGR"], self.input_format
+        # for UNINEXT
+        self.tokenizer = AutoTokenizer.from_pretrained('checkpoints/bert-base-uncased')
+
+
+    def __call__(self, original_images, task, test_categories):
+        """
+        Args:
+            original_images (list[np.ndarray]): an image of shape (H, W, C) (in BGR order).
+
+        Returns:
+            predictions (dict):
+                the output of the model for one image only.
+                See :doc:`/tutorials/models` for details about the format.
+        """
+        # assert task in ['detection', 'grounding']
+        with torch.no_grad():  # https://github.com/sphinx-doc/sphinx/issues/4258
+            # Apply pre-processing to image.
+            images = []
+            for original_image in original_images:
+                if self.input_format == "RGB":
+                    # whether the model expects BGR inputs or RGB
+                    original_image = original_image[:, :, ::-1]
+                height, width = original_image.shape[:2]
+                image = self.aug.get_transform(original_image).apply_image(original_image)
+                image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+                images.append(image)
+            # for UNINEXT
+            expressions, positive_map_label_to_token = create_queries_and_maps(test_categories, self.tokenizer)
+            inputs = {
+                "image": images,"height": height, "width": width, "task": task,
+                "expressions": [expressions], "positive_map_label_to_token": positive_map_label_to_token
+            }
+            predictions = self.model([inputs])
             return predictions

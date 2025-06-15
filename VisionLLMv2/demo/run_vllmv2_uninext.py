@@ -30,7 +30,8 @@ from detectron2.projects.uninext import add_uninext_config
 from detectron2.structures import BoxMode
 
 from .colormap import colormap
-from .uninext_predictor import UNINEXTImagePredictor
+from .utils import rle_to_tensor_for_video
+from .uninext_predictor import UNINEXTImagePredictor, UNINEXTVideoPredictor
 
 IMAGE_TOKEN_INDEX = -200
 
@@ -69,6 +70,14 @@ def load_image(image_file):
 
 
 def eval_model(args):
+    assert args.image_file or args.image_folder, "Please Specify the image file or image folder."
+    if args.image_folder:
+        image_files = sorted(os.listdir(args.image_folder))
+        image_files = [os.path.join(args.image_folder, file) for file in image_files]
+        image_file = image_files[0]
+    else:
+        image_file = args.image_file
+
     # Load VisionLLMv2 Model
     disable_torch_init()
     model_name = os.path.expanduser(args.model_name)
@@ -85,7 +94,7 @@ def eval_model(args):
 
 
     # get image
-    image = load_image(args.image_file)
+    image = load_image(image_file)
     processor = CLIPImageProcessor.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
     if args.image_aspect_ratio == 'anyres':
         image = dynamic_preprocess(image, image_size=args.image_size, max_num=args.image_max_tile) # list[pil_img]
@@ -163,43 +172,64 @@ def eval_model(args):
     outputs = outputs.strip('</s>').strip()
     print(outputs)
 
+    if '<task>' not in outputs:
+        return
 
-    # -------------------------------------------------------------------
+
+    # --------------------------------------------------------------------------------------------------
     # If use UNINEXT
-    # Load UNINEXT Model
     if "r50" in args.uninext_weights: 
         uninext_type = "r50"
     elif "convnext_large" in args.uninext_weights:
         uninext_type = "convnext_large"
     else:
         uninext_type = "vit_huge"
+
     task = extract_task(outputs)
-    if task != "": 
+    if task in ['od', 'is', 'rec', 'res', 'vis', 'vos', 'rvos', 'sot', 'mot', 'mots']: 
         test_categories = extract_refs(outputs) # list[dict]
         test_categories = [{"isthing": 1, "id": i + 1, "name": cat.strip()} for i, cat in enumerate(test_categories)]  # list[dict]
-        # set uninext config-file
+
+        # set uninext config file
         if task in ['od', 'is', 'rec', 'res']:  # image task
             args.config_file = f"UNINEXT/projects/UNINEXT/configs/image_joint_{uninext_type}.yaml"
         else:  # video task
-            args.config_file = f"UNINEXT/projects/UNINEXT/configs/video_joint_{uninext_type}.yaml"
+            args.config_file = f"UNINEXT/projects/UNINEXT/configs/video_joint_{uninext_type}_demo.yaml"
         cfg = setup_cfg(args)
-        # maybe modified for different tasks
         cfg.MODEL.WEIGHTS = args.uninext_weights
+        # maybe modified for different tasks
+        if task in ['vis']:
+            cfg.INPUT.MIN_SIZE_TEST = 720
+            cfg.MODEL.USE_IOU_BRANCH = False
         cfg.freeze()
 
         # setup uninext
-        input_image = cv2.imread(args.image_file)
-        predictor = UNINEXTImagePredictor(cfg)
-        predictions = predictor(input_image, task='detection', test_categories=test_categories)['instances']  # have been postprocessed to original size
+        if task in ['od', 'is', 'rec', 'res']:  # image task
+            input_image = cv2.imread(image_file)
+            predictor = UNINEXTImagePredictor(cfg)
+            predictions = predictor(input_image, task='detection', test_categories=test_categories)['instances']  # have been postprocessed to original size
+            # visualization
+            os.makedirs('uninext_outputs', exist_ok=True)
+            visualize_image_predictions(image_file, predictions, test_categories, show_box=True, show_mask=True)
+        elif task in ['vis']:
+            input_images = []
+            for image_file in image_files:
+                input_image = cv2.imread(image_file)
+                input_images.append(input_image)
+            predictor = UNINEXTVideoPredictor(cfg)
+            prediction = predictor(input_images, task=task, test_categories=test_categories)
+            visualize_vis_predictions(image_files, prediction, test_categories)
+            
 
-        # visualization
-        os.makedirs('uninext_outputs', exist_ok=True)
-        visualize_image_predictions(args.image_file, predictions, test_categories, show_box=True, show_mask=True)
+    else:
+        print(f"{task} is not supported by UNINEXT. [END]")
+
 
 
 def visualize_image_predictions(image_path, predictions, test_categories, show_box=True, show_mask=True):
     # image: cv2 image of [H, W, 3], BGR format
     # predictions: d2 Instances
+    # test_categories: list[dict]
     image = cv2.imread(image_path)    # [H, W, 3], BGR format
     pred_scores = predictions.scores  # [N,]
     pred_classes = predictions.pred_classes
@@ -226,8 +256,48 @@ def visualize_image_predictions(image_path, predictions, test_categories, show_b
             save_image += color_mask
         save_path = f"uninext_outputs/{os.path.basename(image_path)}"
         cv2.imwrite(save_path, save_image)
-    return
+    
+    
+def visualize_vis_predictions(image_paths, prediction, test_categories):
+    # image_paths (list[str])
+    # prediction (dict): 'pred_scores', 'pred_labels', 'pred_masks'
+    pred_scores = torch.tensor(prediction['pred_scores'])          # [n_obj,]
+    pred_classes = torch.tensor(prediction['pred_labels']).long()  # [n_obj,]
+    pred_masks = prediction['pred_masks']  # list[list[rle]]
+    pred_masks = rle_to_tensor_for_video(pred_masks)               # [n_obj, n_frame, ori_h, ori_w]
+    choose = pred_scores > 0.5
+    pred_scores = pred_scores[choose].cpu().numpy()
+    pred_classes = pred_classes[choose].cpu().numpy()
+    pred_masks = pred_masks[choose].cpu().numpy().astype(np.float32)
 
+    # visualize
+    color_list = colormap().tolist()
+    output_path = os.path.join('uninext_outputs/', image_paths[0].split('/')[-2])
+    os.makedirs(output_path, exist_ok=True)
+    n_obj, n_frame, _, _ = pred_masks.shape
+    for frame_idx in range(n_frame):
+        cur_pred_masks = pred_masks[:, frame_idx, :, :]  # [n_obj, ori_h, ori_w]
+        image = cv2.imread(image_paths[frame_idx])
+        save_image = image.astype(np.float32)
+        for inst_idx, (class_idx, mask) in enumerate(zip(pred_classes, cur_pred_masks)):
+            color = color_list[inst_idx%79]
+            color_mask = np.array(color) * mask[:, :, None] * 0.5
+            save_image += color_mask
+            # bbox and text
+            if np.any(mask):  # visible
+                box = bounding_box(mask)  # [x, y, w, h]
+                x1, y1, w, h = box
+                cv2.rectangle(save_image, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color, thickness=2)
+                cv2.putText(save_image, test_categories[class_idx]['name'], (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color=color, thickness=2)
+        save_path = os.path.join(output_path, os.path.basename(image_paths[frame_idx]))
+        cv2.imwrite(save_path, save_image)
+
+def bounding_box(img):
+    rows = np.any(img, axis=1)
+    cols = np.any(img, axis=0)
+    y1, y2 = np.where(rows)[0][[0, -1]]
+    x1, x2 = np.where(cols)[0][[0, -1]]
+    return [int(x1), int(y1), int(x2-x1), int(y2-y1)] # (x1, y1, w, h) 
 
 
 
@@ -236,7 +306,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # vllmv2
     parser.add_argument("--model-name", type=str, default="facebook/opt-350m")
-    parser.add_argument("--image-file", type=str, required=True)
+    parser.add_argument("--image-file", type=str)    # for image task
+    parser.add_argument("--image-folder", type=str)  # for video task
     parser.add_argument("--query", type=str, required=True)
     parser.add_argument("--conv-mode", type=str, default='vicuna_v1')
     parser.add_argument('--image_aspect_ratio', type=str, default='anyres')
