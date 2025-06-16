@@ -13,7 +13,7 @@ s1a python3 -m demo.run_vllmv2_uninext \
     --image_max_tile 6 \
     --use_pixelshuffle True
 
-    # -------------------------------------------------------------
+# -------------------------------------------------------------
 # od/is
 s1a python3 -m demo.run_vllmv2_uninext \
     --model-name work_dirs/visionllmv2-internvl2-8b-ft-uninext \
@@ -25,7 +25,7 @@ s1a python3 -m demo.run_vllmv2_uninext \
     --image_max_tile 6 \
     --use_pixelshuffle True
 
-    # -------------------------------------------------------------
+# -------------------------------------------------------------
 # rec/res
 s1a python3 -m demo.run_vllmv2_uninext \
     --model-name work_dirs/visionllmv2-internvl2-8b-ft-uninext \

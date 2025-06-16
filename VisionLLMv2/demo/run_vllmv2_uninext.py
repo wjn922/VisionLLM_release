@@ -418,11 +418,6 @@ def visualize_mot_predictions(image_paths, predictions, test_categories, output_
 
 
 
-
-
-
-    
-
 def bounding_box(img):
     rows = np.any(img, axis=1)
     cols = np.any(img, axis=0)
