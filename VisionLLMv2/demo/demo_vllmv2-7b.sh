@@ -44,3 +44,26 @@ s1a python3 -m demo.run_vllmv2_uninext \
     --image_aspect_ratio anyres \
     --image_size 336 \
     --image_max_tile 4 
+
+# -------------------------------------------------------------
+# rvos
+s1a python3 -m demo.run_vllmv2_uninext \
+    --model-name work_dirs/visionllmv2-7b-pure-ft-uninext \
+    --image-folder datasets/ref-youtube-vos/valid/JPEGImages/3dd327ab4e \
+    --query "Could you provide the segmentation masks of the brown cow for every single frame of the video?" \
+    --conv-mode vicuna_v1 \
+    --image_aspect_ratio anyres \
+    --image_size 336 \
+    --image_max_tile 4 
+
+# -------------------------------------------------------------
+# vos
+s1a python3 -m demo.run_vllmv2_uninext \
+    --model-name work_dirs/visionllmv2-7b-pure-ft-uninext \
+    --image-folder datasets/ytbvos18/val/JPEGImages/1ecc34b1bf \
+    --ref_mask assets/ytbvos18_1ecc34b1bf_ref.png \
+    --query "Can you segment and track the moving object in the video using the initial mask provided?" \
+    --conv-mode vicuna_v1 \
+    --image_aspect_ratio anyres \
+    --image_size 336 \
+    --image_max_tile 4 

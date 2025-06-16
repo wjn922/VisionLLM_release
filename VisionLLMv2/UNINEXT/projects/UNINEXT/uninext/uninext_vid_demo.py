@@ -255,15 +255,15 @@ class UNINEXT_VID_DEMO(nn.Module):
         task = task_list[0]
 
         # NOTE: inference only
-        captions = []
-        for video in batched_inputs:
-            for cap in video["expressions"]:
-                captions.append(cap)
-        assert len(set(captions)) == 1
-        positive_map_label_to_token = batched_inputs[0]["positive_map_label_to_token"] 
-        num_classes = len(positive_map_label_to_token)
-        language_dict_features = self.forward_text(captions[0:1], device="cuda")
-        if task == 'vis':
+        if task in ['vis', 'rvos']:
+            captions = []
+            for video in batched_inputs:
+                for cap in video["expressions"]:
+                    captions.append(cap)
+            assert len(set(captions)) == 1
+            positive_map_label_to_token = batched_inputs[0]["positive_map_label_to_token"] 
+            num_classes = len(positive_map_label_to_token)
+            language_dict_features = self.forward_text(captions[0:1], device="cuda")
             self.tracker = IDOL_Tracker(
                 init_score_thr= 0.2,
                 obj_score_thr=0.1,
@@ -278,25 +278,99 @@ class UNINEXT_VID_DEMO(nn.Module):
                 memory_len = self.memory_len
             )
 
-        # bs = 1 during inference
-        height = batched_inputs[0]['height']
-        width = batched_inputs[0]['width']
-        video_len = len(batched_inputs[0]["image"])
-        video_dict = {}
-        # process for each frame
-        for frame_idx in range(video_len):
-            print(f"processing {frame_idx+1} / {video_len} frame...")
-            clip_inputs = [{'image':batched_inputs[0]['image'][frame_idx:frame_idx+1]}]
-            images = self.preprocess_video(clip_inputs)
-            language_dict_features_cur = copy.deepcopy(language_dict_features) # Important
-            output, _ = self.detr.coco_inference(images, None, None, language_dict_features=language_dict_features_cur, task='detection')
-            if task == 'vis':
+            # bs = 1 during inference
+            height = batched_inputs[0]['height']
+            width = batched_inputs[0]['width']
+            video_len = len(batched_inputs[0]["image"])
+            video_dict = {}
+            # process for each frame
+            for frame_idx in range(video_len):
+                print(f"processing {frame_idx+1} / {video_len} frame...")
+                clip_inputs = [{'image':batched_inputs[0]['image'][frame_idx:frame_idx+1]}]
+                images = self.preprocess_video(clip_inputs)
+                language_dict_features_cur = copy.deepcopy(language_dict_features) # Important
+                output, _ = self.detr.coco_inference(images, None, None, language_dict_features=language_dict_features_cur, task='detection')
                 output_h, output_w = self.inference_vis(output, positive_map_label_to_token, num_classes, video_dict, frame_idx, (height, width), images.image_sizes[0])
-        
-        # post process
-        if task == 'vis':
+            
+            # post process
             video_output = self.post_process_vis(video_dict, video_len, (height, width), images.image_sizes[0], output_h, output_w)
             return video_output
+
+        elif task in ['vos', 'sot']:
+            positive_map_label_to_token = {1: [0]}
+            num_classes = len(positive_map_label_to_token)
+
+            # bs = 1 during inference
+            height = batched_inputs[0]['height']
+            width = batched_inputs[0]['width']
+            video_len = len(batched_inputs[0]["image"])
+            mask_anno = batched_inputs[0]['mask_anno']
+            final_masks = []
+            for frame_idx in range(video_len):
+                print(f"processing {frame_idx+1} / {video_len} frame...")
+                clip_inputs = [{'image':batched_inputs[0]['image'][frame_idx:frame_idx+1]}]
+                images = self.preprocess_video(clip_inputs)
+                # first frame
+                if frame_idx == 0:
+                    # mask_anno
+                    x1_c, y1_c, w_c, h_c = bounding_box(mask_anno) # current bounding box
+                    cur_ref_bboxes = torch.tensor([x1_c, y1_c, x1_c+w_c, y1_c+h_c]).view(1, 4)
+                    cur_ref_bboxes = [cur_ref_bboxes.to(self.device)] # List (1, 4)
+                    size_divisibility = getattr(self.detr.detr.backbone[0].backbone, "size_divisibility", 32)
+                    if size_divisibility != 0:
+                        mask_h, mask_w = mask_anno.shape
+                        mask_h_new = (mask_h + (size_divisibility - 1)) // size_divisibility * size_divisibility
+                        mask_w_new = (mask_w + (size_divisibility - 1)) // size_divisibility * size_divisibility
+                        mask_anno_new = np.zeros((mask_h_new, mask_w_new), dtype=np.uint8)
+                        mask_anno_new[:mask_h, :mask_w] = mask_anno
+                        cur_ref_masks = [torch.from_numpy(mask_anno_new[None]).to(self.device)]
+                    else:
+                        cur_ref_masks = [torch.from_numpy(mask_anno[None]).to(self.device)]
+                    self.language_dict_features, template = self.detr.coco_inference_ref_vos(images, cur_ref_bboxes, cur_ref_masks)
+                    self.language_dict_features_prev = copy.deepcopy(self.language_dict_features)
+                    continue
+                # subsequent frames
+                if self.online_update:
+                    language_dict_features1 = copy.deepcopy(self.language_dict_features)      # Important
+                    language_dict_features2 = copy.deepcopy(self.language_dict_features_prev) # Important
+                    language_dict_features_cur = {}
+                    language_dict_features_cur["hidden"] = torch.cat([language_dict_features1["hidden"], language_dict_features2["hidden"]], dim=1)
+                    language_dict_features_cur["masks"] = torch.cat([language_dict_features1["masks"], language_dict_features2["masks"]], dim=1)
+                else:
+                    language_dict_features_cur = copy.deepcopy(self.language_dict_features)   # Important
+                output, _ = self.detr.coco_inference(images, None, None, language_dict_features=language_dict_features_cur, task='sot')
+                box_cls = output["pred_logits"]
+                box_pred = output["pred_boxes"]
+                mask_pred = output["pred_masks"] if self.mask_on else [None] * len(batched_inputs)
+                if self.detr.use_iou_branch:
+                    iou_pred = output["pred_boxious"]
+                else:
+                    iou_pred = [None]
+                results = self.inference(box_cls, box_pred, mask_pred, images.image_sizes, positive_map_label_to_token, num_classes, task='sot', iou_pred=iou_pred)
+                for results_per_image, input_per_image, image_size in zip(results, batched_inputs, images.image_sizes):
+                    scale_x, scale_y = (
+                        width / results_per_image.image_size[1],
+                        height / results_per_image.image_size[0],
+                    )
+                    results_per_image.pred_boxes.scale(scale_x, scale_y)
+                    results_per_image.pred_boxes.clip((height, width))
+                    x1, y1, x2, y2 = results_per_image.pred_boxes.tensor.tolist()[0]
+                    # mask
+                    if results_per_image.scores.item() < self.inst_thr_vos:
+                        final_mask = np.zeros((height, width)).astype(np.uint8)
+                    else:
+                        final_mask = F.interpolate(results_per_image.pred_masks[:,:,:image_size[0],:image_size[1]].float(), size=(height, width), mode="bilinear", align_corners=False)
+                        final_mask = final_mask[0, 0].cpu().numpy().astype(np.uint8) # (H, W) original size
+                final_masks.append(final_mask)  # topk = 1 for sot
+                if self.online_update and (frame_idx % self.update_interval == 0) and (results[0].scores > self.update_thr):
+                    # update the template
+                    bboxes_unorm = torch.tensor([[x1, y1, x2, y2]]) / torch.tensor([scale_x, scale_y, scale_x, scale_y])
+                    self.language_dict_features_prev, new_template = self.detr.coco_inference_ref_vos(images, [bboxes_unorm.to(self.device)], [results_per_image.pred_masks.float()[0]])
+            return final_masks  # list[np.array], each array of original [H, W], type uint8
+                
+
+
+
             
 
     def inference_rvos_offline(self, batched_inputs, images):

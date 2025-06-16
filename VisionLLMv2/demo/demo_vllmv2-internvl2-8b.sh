@@ -48,3 +48,28 @@ s1a python3 -m demo.run_vllmv2_uninext \
     --image_size 448 \
     --image_max_tile 6 \
     --use_pixelshuffle True
+
+# -------------------------------------------------------------
+# rvos
+s1a python3 -m demo.run_vllmv2_uninext \
+    --model-name work_dirs/visionllmv2-internvl2-8b-ft-uninext \
+    --image-folder datasets/ref-youtube-vos/valid/JPEGImages/3dd327ab4e \
+    --query "Could you provide the segmentation masks of the brown cow for every single frame of the video?" \
+    --conv-mode internlm2_chat \
+    --image_aspect_ratio anyres \
+    --image_size 448 \
+    --image_max_tile 6 \
+    --use_pixelshuffle True
+
+# -------------------------------------------------------------
+# vos
+s1a python3 -m demo.run_vllmv2_uninext \
+    --model-name work_dirs/visionllmv2-internvl2-8b-ft-uninext \
+    --image-folder datasets/ytbvos18/val/JPEGImages/1ecc34b1bf \
+    --ref_mask assets/ytbvos18_1ecc34b1bf_ref.png \
+    --query "Can you segment and track the moving object in the video using the initial mask provided?" \
+    --conv-mode internlm2_chat \
+    --image_aspect_ratio anyres \
+    --image_size 448 \
+    --image_max_tile 6 \
+    --use_pixelshuffle True

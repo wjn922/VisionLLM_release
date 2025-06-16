@@ -31,7 +31,7 @@ from detectron2.structures import BoxMode
 
 from .colormap import colormap
 from .utils import rle_to_tensor_for_video
-from .uninext_predictor import UNINEXTImagePredictor, UNINEXTVideoPredictor
+from .uninext_predictor import UNINEXTImagePredictor, UNINEXTVideoPredictor, UNINEXTVideoSOTPredictor
 
 IMAGE_TOKEN_INDEX = -200
 
@@ -198,28 +198,52 @@ def eval_model(args):
         cfg = setup_cfg(args)
         cfg.MODEL.WEIGHTS = args.uninext_weights
         # maybe modified for different tasks
-        if task in ['vis']:
+        if task in ['vis', 'rvos']:
             cfg.INPUT.MIN_SIZE_TEST = 720
             cfg.MODEL.USE_IOU_BRANCH = False
+        elif task in ['vos', 'sot']:
+            cfg.INPUT.MIN_SIZE_TEST = 720
+            cfg.SOT.ONLINE_UPDATE = True
         cfg.freeze()
 
         # setup uninext
         if task in ['od', 'is', 'rec', 'res']:  # image task
             input_image = cv2.imread(image_file)
             predictor = UNINEXTImagePredictor(cfg)
-            predictions = predictor(input_image, task='detection', test_categories=test_categories)['instances']  # have been postprocessed to original size
+            predictions = predictor(input_image, task='detection', test_categories=test_categories)['instances']  # d2 Instance, have been postprocessed to original size
             # visualization
             os.makedirs('uninext_outputs', exist_ok=True)
             visualize_image_predictions(image_file, predictions, test_categories, show_box=True, show_mask=True)
-        elif task in ['vis']:
+            print(f"Saving results to uninext_outputs/{os.path.basename(image_path)}")
+        elif task in ['vis', 'rvos']:
             input_images = []
             for image_file in image_files:
                 input_image = cv2.imread(image_file)
                 input_images.append(input_image)
             predictor = UNINEXTVideoPredictor(cfg)
-            prediction = predictor(input_images, task=task, test_categories=test_categories)
-            visualize_vis_predictions(image_files, prediction, test_categories)
-            
+            prediction = predictor(input_images, task=task, test_categories=test_categories)  # dict
+            output_path = os.path.join('uninext_outputs/', image_files[0].split('/')[-2])
+            os.makedirs(output_path, exist_ok=True) 
+            visualize_vis_predictions(image_files, prediction, test_categories, output_path)
+            print(f"Saving results to {output_path}")
+        elif task in ['vos', 'sot']:
+            input_images = []
+            for image_file in image_files:
+                input_image = cv2.imread(image_file)
+                input_images.append(input_image)
+            if args.ref_mask:
+                mask_anno = Image.open(args.ref_mask).convert('L')  
+                mask_anno = np.array(mask_anno)
+            else:
+                print(f"Not provide the ref annotation for {task}. [END]")
+                return 
+            predictor = UNINEXTVideoSOTPredictor(cfg)
+            predictions = predictor(input_images, task=task, mask_anno=mask_anno)  # list[np.array]
+            predictions.insert(0, mask_anno)  # insert first frame mask anno
+            output_path = os.path.join('uninext_outputs/', image_files[0].split('/')[-2])
+            os.makedirs(output_path, exist_ok=True) 
+            visualize_vos_predictions(image_files, predictions, output_path)
+            print(f"Saving results to {output_path}")
 
     else:
         print(f"{task} is not supported by UNINEXT. [END]")
@@ -258,7 +282,7 @@ def visualize_image_predictions(image_path, predictions, test_categories, show_b
         cv2.imwrite(save_path, save_image)
     
     
-def visualize_vis_predictions(image_paths, prediction, test_categories):
+def visualize_vis_predictions(image_paths, prediction, test_categories, output_path):
     # image_paths (list[str])
     # prediction (dict): 'pred_scores', 'pred_labels', 'pred_masks'
     pred_scores = torch.tensor(prediction['pred_scores'])          # [n_obj,]
@@ -272,8 +296,6 @@ def visualize_vis_predictions(image_paths, prediction, test_categories):
 
     # visualize
     color_list = colormap().tolist()
-    output_path = os.path.join('uninext_outputs/', image_paths[0].split('/')[-2])
-    os.makedirs(output_path, exist_ok=True)
     n_obj, n_frame, _, _ = pred_masks.shape
     for frame_idx in range(n_frame):
         cur_pred_masks = pred_masks[:, frame_idx, :, :]  # [n_obj, ori_h, ori_w]
@@ -292,6 +314,27 @@ def visualize_vis_predictions(image_paths, prediction, test_categories):
         save_path = os.path.join(output_path, os.path.basename(image_paths[frame_idx]))
         cv2.imwrite(save_path, save_image)
 
+def visualize_vos_predictions(image_paths, predictions, output_path):
+    # image_paths: list[str]
+    # predictions: list[array], size of original [H, W], type uint8
+    n_frame = len(image_paths)
+    for frame_idx in range(n_frame):
+        image = cv2.imread(image_paths[frame_idx])
+        save_image = image.astype(np.float32)
+        mask = predictions[frame_idx]
+        if np.any(mask):
+            box = bounding_box(mask)  # [x, y, w, h]
+            x1, y1, w, h = box
+            cv2.rectangle(save_image, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color=(0,0,255), thickness=2)
+            color_mask = np.array((0, 0, 255)) * mask[:, :, None] * 0.5
+            save_image += color_mask
+        save_path = os.path.join(output_path, os.path.basename(image_paths[frame_idx]))
+        cv2.imwrite(save_path, save_image)
+
+
+
+    
+
 def bounding_box(img):
     rows = np.any(img, axis=1)
     cols = np.any(img, axis=0)
@@ -304,7 +347,7 @@ def bounding_box(img):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # vllmv2
+    # visionllmv2
     parser.add_argument("--model-name", type=str, default="facebook/opt-350m")
     parser.add_argument("--image-file", type=str)    # for image task
     parser.add_argument("--image-folder", type=str)  # for video task
@@ -317,6 +360,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_pixelshuffle", type=bool, default=False)
     # uninext
     parser.add_argument("--uninext_weights", type=str, default="checkpoints/uninext/video_joint_convnext_large.pth")
+    parser.add_argument("--ref_mask", type=str, help='path to the mask anno for VOS')    # vos, first frame mask anno
     args = parser.parse_args()
 
     eval_model(args)
