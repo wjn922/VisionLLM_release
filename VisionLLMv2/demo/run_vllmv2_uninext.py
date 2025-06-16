@@ -154,6 +154,7 @@ def eval_model(args):
             images=image_tensor,
             do_sample=True,
             temperature=0.7,
+            repetition_penalty=1.1,
             max_new_tokens=1024,
             use_cache=True,
             stopping_criteria=[stopping_criteria],
@@ -206,7 +207,7 @@ def eval_model(args):
             cfg.SOT.ONLINE_UPDATE = True
         cfg.freeze()
 
-        # setup uninext
+        # run uninext
         if task in ['od', 'is', 'rec', 'res']:  # image task
             input_image = cv2.imread(image_file)
             predictor = UNINEXTImagePredictor(cfg)
@@ -214,7 +215,7 @@ def eval_model(args):
             # visualization
             os.makedirs('uninext_outputs', exist_ok=True)
             visualize_image_predictions(image_file, predictions, test_categories, show_box=True, show_mask=True)
-            print(f"Saving results to uninext_outputs/{os.path.basename(image_path)}")
+            print(f"Saving results to uninext_outputs/{os.path.basename(image_file)}")
         elif task in ['vis', 'rvos']:
             input_images = []
             for image_file in image_files:
@@ -233,7 +234,10 @@ def eval_model(args):
                 input_images.append(input_image)
             if args.ref_mask:
                 mask_anno = Image.open(args.ref_mask).convert('L')  
-                mask_anno = np.array(mask_anno)
+                mask_anno = np.array(mask_anno) / 255.0  # normalize to [0, 1]
+            elif args.ref_box:
+                width, height = Image.open(image_files[0]).size
+                mask_anno = create_mask_from_box(args.ref_box, height, width)  # binary [0, 1]
             else:
                 print(f"Not provide the ref annotation for {task}. [END]")
                 return 
@@ -247,6 +251,39 @@ def eval_model(args):
 
     else:
         print(f"{task} is not supported by UNINEXT. [END]")
+
+
+def create_mask_from_box(box, height, width):
+    """
+    根据边界框生成二值遮罩
+    
+    参数:
+    box (list): 边界框坐标 [x1, y1, x2, y2]
+    height (int): 图片高度
+    width (int): 图片宽度
+    
+    返回:
+    np.ndarray: 二值遮罩，类型为np.uint8，背景为0，框内区域为255
+    """
+    # 创建全零数组（背景）
+    mask = np.zeros((height, width), dtype=np.uint8)
+    
+    # 提取边界框坐标
+    x1, y1, x2, y2 = box
+    
+    # 确保坐标在有效范围内
+    x1 = max(0, int(x1))
+    y1 = max(0, int(y1))
+    x2 = min(width, int(x2))
+    y2 = min(height, int(y2))
+    
+    # 检查框是否有效
+    if x1 < x2 and y1 < y2:
+        # 将框内区域设为255（白色）
+        mask[y1:y2, x1:x2] = 1
+    
+    return mask
+
 
 
 
@@ -343,6 +380,19 @@ def bounding_box(img):
     return [int(x1), int(y1), int(x2-x1), int(y2-y1)] # (x1, y1, w, h) 
 
 
+def parse_box(s):
+    # 去除方括号并分割字符串
+    s = s.strip('[]')
+    parts = s.split(',')
+    # 将各部分转换为浮点数
+    try:
+        box = [float(part.strip()) for part in parts]
+    except ValueError:
+        raise argparse.ArgumentTypeError("Box values must be numbers")
+    # 验证是否为4个值
+    if len(box) != 4:
+        raise argparse.ArgumentTypeError("Box must contain 4 values: x1, y1, x2, y2")
+    return box
 
 
 if __name__ == "__main__":
@@ -361,6 +411,8 @@ if __name__ == "__main__":
     # uninext
     parser.add_argument("--uninext_weights", type=str, default="checkpoints/uninext/video_joint_convnext_large.pth")
     parser.add_argument("--ref_mask", type=str, help='path to the mask anno for VOS')    # vos, first frame mask anno
+    parser.add_argument("--ref_box", type=parse_box, help='Bounding box in the format [x1, y1, x2, y2]')
     args = parser.parse_args()
 
     eval_model(args)
+

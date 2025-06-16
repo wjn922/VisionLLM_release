@@ -67,3 +67,15 @@ s1a python3 -m demo.run_vllmv2_uninext \
     --image_aspect_ratio anyres \
     --image_size 336 \
     --image_max_tile 4 
+
+# -------------------------------------------------------------
+# sot
+s1a python3 -m demo.run_vllmv2_uninext \
+    --model-name work_dirs/visionllmv2-7b-pure-ft-uninext \
+    --image-folder datasets/LaSOT/basketball/basketball-1/img \
+    --ref_box "[347, 135, 366, 153]" \
+    --query "Use the initial box annotation to generate a tracking trajectory for the single target." \
+    --conv-mode vicuna_v1 \
+    --image_aspect_ratio anyres \
+    --image_size 336 \
+    --image_max_tile 4 
