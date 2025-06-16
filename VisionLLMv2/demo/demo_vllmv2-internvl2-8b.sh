@@ -86,3 +86,15 @@ s1a python3 -m demo.run_vllmv2_uninext \
     --image_size 448 \
     --image_max_tile 6 \
     --use_pixelshuffle True
+
+# -------------------------------------------------------------
+# mot / mots
+s1a python3 -m demo.run_vllmv2_uninext \
+    --model-name work_dirs/visionllmv2-internvl2-8b-ft-uninext \
+    --image-folder datasets/bdd/images/seg_track_20/val/b1c9c847-3bda4659 \
+    --query "Could you predict bounding boxes and segmentation masks for all car instances in the video sequence?" \
+    --conv-mode internlm2_chat \
+    --image_aspect_ratio anyres \
+    --image_size 448 \
+    --image_max_tile 6 \
+    --use_pixelshuffle True

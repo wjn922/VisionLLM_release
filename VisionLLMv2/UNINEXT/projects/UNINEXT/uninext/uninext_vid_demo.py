@@ -295,6 +295,45 @@ class UNINEXT_VID_DEMO(nn.Module):
             # post process
             video_output = self.post_process_vis(video_dict, video_len, (height, width), images.image_sizes[0], output_h, output_w)
             return video_output
+        
+        elif task in ['mot', 'mots']:
+            captions = []
+            for video in batched_inputs:
+                for cap in video["expressions"]:
+                    captions.append(cap)
+            assert len(set(captions)) == 1
+            positive_map_label_to_token = batched_inputs[0]["positive_map_label_to_token"] 
+            num_classes = len(positive_map_label_to_token)
+            language_dict_features = self.forward_text(captions[0:1], device="cuda")
+            self.tracker = QuasiDenseEmbedTracker(
+                init_score_thr=self.init_score_thr,
+                obj_score_thr=self.obj_score_thr,
+                match_score_thr=0.5,
+                memo_tracklet_frames=10,
+                memo_backdrop_frames=1,
+                memo_momentum=1.0,
+                nms_conf_thr=0.5,
+                nms_backdrop_iou_thr=0.3,
+                nms_class_iou_thr=0.7,
+                with_cats=True,
+                match_metric='bisoftmax'
+            )
+
+            # bs = 1 during inference
+            height = batched_inputs[0]['height']
+            width = batched_inputs[0]['width']
+            video_len = len(batched_inputs[0]["image"])
+            results = defaultdict(list)
+            # process for each frame
+            for frame_idx in range(video_len):
+                print(f"processing {frame_idx+1} / {video_len} frame...")
+                clip_inputs = [{'image':batched_inputs[0]['image'][frame_idx:frame_idx+1]}]
+                images = self.preprocess_video(clip_inputs)
+                language_dict_features_cur = copy.deepcopy(language_dict_features) # Important
+                output, _ = self.detr.coco_inference(images, None, None, language_dict_features=language_dict_features_cur, task='detection')
+                self.inference_mot(output, positive_map_label_to_token, num_classes, results, frame_idx, images.image_sizes, (height, width), mots=True)
+            return results
+            
 
         elif task in ['vos', 'sot']:
             positive_map_label_to_token = {1: [0]}

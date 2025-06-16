@@ -30,7 +30,7 @@ from detectron2.projects.uninext import add_uninext_config
 from detectron2.structures import BoxMode
 
 from .colormap import colormap
-from .utils import rle_to_tensor_for_video
+from .utils import rle_to_tensor_for_video, rle_decode
 from .uninext_predictor import UNINEXTImagePredictor, UNINEXTVideoPredictor, UNINEXTVideoSOTPredictor
 
 IMAGE_TOKEN_INDEX = -200
@@ -205,6 +205,10 @@ def eval_model(args):
         elif task in ['vos', 'sot']:
             cfg.INPUT.MIN_SIZE_TEST = 720
             cfg.SOT.ONLINE_UPDATE = True
+        elif task in ['mots', 'mot']:
+            cfg.MODEL.USE_IOU_BRANCH = False
+            cfg.TRACK.INIT_SCORE_THR = 0.4
+            cfg.TRACK.OBJ_SCORE_THR = 0.3
         cfg.freeze()
 
         # run uninext
@@ -232,6 +236,7 @@ def eval_model(args):
             for image_file in image_files:
                 input_image = cv2.imread(image_file)
                 input_images.append(input_image)
+            # read ref annotation
             if args.ref_mask:
                 mask_anno = Image.open(args.ref_mask).convert('L')  
                 mask_anno = np.array(mask_anno) / 255.0  # normalize to [0, 1]
@@ -247,6 +252,17 @@ def eval_model(args):
             output_path = os.path.join('uninext_outputs/', image_files[0].split('/')[-2])
             os.makedirs(output_path, exist_ok=True) 
             visualize_vos_predictions(image_files, predictions, output_path)
+            print(f"Saving results to {output_path}")
+        elif task in ['mot', 'mots']:
+            input_images = []
+            for image_file in image_files:
+                input_image = cv2.imread(image_file)
+                input_images.append(input_image)
+            predictor = UNINEXTVideoPredictor(cfg)
+            predictions = predictor(input_images, task=task, test_categories=test_categories)  # defaultdict(list)
+            output_path = os.path.join('uninext_outputs/', image_files[0].split('/')[-2])
+            os.makedirs(output_path, exist_ok=True) 
+            visualize_mot_predictions(image_files, predictions, test_categories, output_path)
             print(f"Saving results to {output_path}")
 
     else:
@@ -283,7 +299,6 @@ def create_mask_from_box(box, height, width):
         mask[y1:y2, x1:x2] = 1
     
     return mask
-
 
 
 
@@ -347,7 +362,7 @@ def visualize_vis_predictions(image_paths, prediction, test_categories, output_p
                 box = bounding_box(mask)  # [x, y, w, h]
                 x1, y1, w, h = box
                 cv2.rectangle(save_image, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color, thickness=2)
-                cv2.putText(save_image, test_categories[class_idx]['name'], (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color=color, thickness=2)
+                cv2.putText(save_image, f"{inst_idx} " + test_categories[class_idx]['name'], (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color=color, thickness=2)
         save_path = os.path.join(output_path, os.path.basename(image_paths[frame_idx]))
         cv2.imwrite(save_path, save_image)
 
@@ -367,6 +382,42 @@ def visualize_vos_predictions(image_paths, predictions, output_path):
             save_image += color_mask
         save_path = os.path.join(output_path, os.path.basename(image_paths[frame_idx]))
         cv2.imwrite(save_path, save_image)
+
+def visualize_mot_predictions(image_paths, predictions, test_categories, output_path):
+    # image_paths: list[str]
+    # predictions: defaultdict(list), 'bbox_result', 'track_result'. for mots=True
+    # set mots=True inside UNINEXT_VID_DEMO
+    track_results = predictions['track_result']  # list[dict]
+    # length of n_frame
+    # dict for each inst_id, 'bbox', 'label' 'segm'
+
+    # visualize
+    color_list = colormap().tolist()
+    n_frame = len(image_paths)
+    for frame_idx in range(n_frame):
+        # image
+        image = cv2.imread(image_paths[frame_idx])
+        height, width = image.shape[:2]
+        save_image = image.astype(np.float32)
+        # prediction
+        track_result = track_results[frame_idx]  # dict
+        for inst_idx in track_result.keys():
+            color = color_list[inst_idx%79]
+            label = track_result[inst_idx]['label']
+            bbox = track_result[inst_idx]['bbox'][:4]  # [5,], last one is score
+            mask = rle_decode(track_result[inst_idx]['segm'], height, width)  # np.uint8, in [0, 1]
+            # plot
+            x1, y1, x2, y2 = bbox
+            w, h = x2 - x1, y2 - y1
+            cv2.rectangle(save_image, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color, thickness=2)
+            cv2.putText(save_image, f"{inst_idx} " + test_categories[label]['name'], (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color=color, thickness=2)
+            color_mask = np.array(color) * mask[:, :, None] * 0.5
+            save_image += color_mask
+        save_path = os.path.join(output_path, os.path.basename(image_paths[frame_idx]))
+        cv2.imwrite(save_path, save_image)
+
+
+
 
 
 
