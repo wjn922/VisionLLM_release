@@ -125,5 +125,6 @@ ln -s /mnt/petrelfs/share_data/liuzhaoyang/datasets/wjn_data/bdd100k/bdd100k bdd
 
 # Demo
 
-Refer to `demo/demo_vllmv2-7b.sh` for VisionLLMv2-7B + UNINEXT demo.
+Refer to `demo/demo_vllmv2-7b.sh` for VisionLLMv2-7B + UNINEXT demo.    
+
 Refer to `demo/demo_vllmv2-internvl2-8b.sh` for VisionLLMv2-InternVL2-8B + UNINEXT demo. (Recommend)
