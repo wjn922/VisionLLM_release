@@ -54,7 +54,7 @@ s1a python3 -m demo.run_vllmv2_uninext \
 s1a python3 -m demo.run_vllmv2_uninext \
     --model-name work_dirs/visionllmv2-internvl2-8b-ft-uninext \
     --image-folder datasets/ref-youtube-vos/valid/JPEGImages/3dd327ab4e \
-    --query "Could you provide the segmentation masks of the brown cow for every single frame of the video?" \
+    --query "Can you create frame-by-frame segmentation masks for the brown cow in the middle shown in the video?" \
     --conv-mode internlm2_chat \
     --image_aspect_ratio anyres \
     --image_size 448 \

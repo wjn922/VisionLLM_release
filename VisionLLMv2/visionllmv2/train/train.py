@@ -819,6 +819,7 @@ def train(eval_only=False):
 
     # save models
     safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
+    data_args.img_processor.save_pretrained(training_args.output_dir)
 
 
 if __name__ == "__main__":

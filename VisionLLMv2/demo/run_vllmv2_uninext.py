@@ -213,6 +213,9 @@ def eval_model(args):
 
         # run uninext
         if task in ['od', 'is', 'rec', 'res']:  # image task
+            if len(test_categories) == 0:
+                print("Do not interpret the needed objects. [END]")
+                return
             input_image = cv2.imread(image_file)
             predictor = UNINEXTImagePredictor(cfg)
             predictions = predictor(input_image, task='detection', test_categories=test_categories)['instances']  # d2 Instance, have been postprocessed to original size
@@ -221,6 +224,9 @@ def eval_model(args):
             visualize_image_predictions(image_file, predictions, test_categories, show_box=True, show_mask=True)
             print(f"Saving results to uninext_outputs/{os.path.basename(image_file)}")
         elif task in ['vis', 'rvos']:
+            if len(test_categories) == 0:
+                print("Do not interpret the needed objects. [END]")
+                return
             input_images = []
             for image_file in image_files:
                 input_image = cv2.imread(image_file)
@@ -254,6 +260,9 @@ def eval_model(args):
             visualize_vos_predictions(image_files, predictions, output_path)
             print(f"Saving results to {output_path}")
         elif task in ['mot', 'mots']:
+            if len(test_categories) == 0:
+                print("Do not interpret the needed objects. [END]")
+                return
             input_images = []
             for image_file in image_files:
                 input_image = cv2.imread(image_file)
