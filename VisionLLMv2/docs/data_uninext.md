@@ -15,6 +15,8 @@ cd ..
 ```
 mkdir work_dirs && cd work_dirs
 ln -s /mnt/petrelfs/share_data/liuzhaoyang/share/wjn_models/visionllmv2-7b-pure .
+ln -s /mnt/petrelfs/share_data/liuzhaoyang/share/wjn_models/visionllmv2-7b-pure-ft-uninext .
+ln -s /mnt/petrelfs/share_data/liuzhaoyang/share/wjn_models/visionllmv2-internvl2-8b-ft-uninext .
 cd ..
 ```
 
@@ -119,3 +121,9 @@ ln -s /mnt/petrelfs/share_data/liuzhaoyang/datasets/wjn_data/TNL2K_test_subset/T
 ```
 ln -s /mnt/petrelfs/share_data/liuzhaoyang/datasets/wjn_data/bdd100k/bdd100k bdd
 ```
+
+
+# Demo
+
+Refer to `demo/demo_vllmv2-7b.sh` for VisionLLMv2-7B + UNINEXT demo.
+Refer to `demo/demo_vllmv2-internvl2-8b.sh` for VisionLLMv2-InternVL2-8B + UNINEXT demo. (Recommend)
